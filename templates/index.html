@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Web RAG — Gemini GPT</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="logo">
+        <span class="logo-icon">🔍</span>
+        <h1>Web RAG <span class="accent">GeminiGPT</span></h1>
+      </div>
+      <p class="subtitle">Retrieval-Augmented Generation powered by live web search + Gemini AI</p>
+    </header>
+
+    <main class="main">
+      <form id="queryForm" class="search-form">
+        <div class="input-row">
+          <input
+            type="text"
+            id="queryInput"
+            class="search-input"
+            placeholder="Ask anything — e.g. What is retrieval-augmented generation?"
+            autocomplete="off"
+            required
+          />
+          <button type="submit" class="search-btn" id="submitBtn">
+            <span class="btn-text">Ask</span>
+            <span class="btn-spinner hidden" aria-hidden="true"></span>
+          </button>
+        </div>
+      </form>
+
+      <div id="errorBanner" class="error-banner hidden"></div>
+
+      <section id="resultsSection" class="results hidden">
+        <div class="result-card answer-card">
+          <div class="card-header">
+            <span class="card-icon">✨</span>
+            <h2>Gemini Answer</h2>
+          </div>
+          <div id="answerText" class="answer-text"></div>
+        </div>
+
+        <div class="result-card sources-card">
+          <div class="card-header">
+            <span class="card-icon">🌐</span>
+            <h2>Retrieved Sources</h2>
+          </div>
+          <ul id="sourcesList" class="sources-list"></ul>
+        </div>
+
+        <details class="result-card context-card">
+          <summary class="card-header">
+            <span class="card-icon">📄</span>
+            <h2>Retrieved Context Chunks</h2>
+            <span class="toggle-hint">click to expand</span>
+          </summary>
+          <div id="contextChunks" class="context-chunks"></div>
+        </details>
+      </section>
+    </main>
+
+    <footer class="footer">
+      Built with Flask · BeautifulSoup · Google Gemini API
+    </footer>
+  </div>
+
+  <script>
+    const form = document.getElementById("queryForm");
+    const input = document.getElementById("queryInput");
+    const submitBtn = document.getElementById("submitBtn");
+    const btnText = submitBtn.querySelector(".btn-text");
+    const btnSpinner = submitBtn.querySelector(".btn-spinner");
+    const errorBanner = document.getElementById("errorBanner");
+    const resultsSection = document.getElementById("resultsSection");
+    const answerText = document.getElementById("answerText");
+    const sourcesList = document.getElementById("sourcesList");
+    const contextChunks = document.getElementById("contextChunks");
+
+    function setLoading(loading) {
+      submitBtn.disabled = loading;
+      btnText.classList.toggle("hidden", loading);
+      btnSpinner.classList.toggle("hidden", !loading);
+      input.disabled = loading;
+    }
+
+    function showError(msg) {
+      errorBanner.textContent = msg;
+      errorBanner.classList.remove("hidden");
+      resultsSection.classList.add("hidden");
+    }
+
+    function clearError() {
+      errorBanner.classList.add("hidden");
+      errorBanner.textContent = "";
+    }
+
+    function renderResults(data) {
+      // Answer
+      answerText.innerHTML = data.answer
+        .split("\n")
+        .map(p => p.trim())
+        .filter(Boolean)
+        .map(p => `<p>${p}</p>`)
+        .join("");
+
+      // Sources
+      sourcesList.innerHTML = "";
+      if (data.sources && data.sources.length > 0) {
+        data.sources.forEach((src, i) => {
+          const li = document.createElement("li");
+          li.innerHTML = `<span class="source-num">${i + 1}</span>
+            <a href="${src.url}" target="_blank" rel="noopener noreferrer">${src.title || src.url}</a>`;
+          sourcesList.appendChild(li);
+        });
+      } else {
+        sourcesList.innerHTML = "<li class='no-sources'>No sources retrieved.</li>";
+      }
+
+      // Context chunks
+      contextChunks.innerHTML = "";
+      if (data.context_chunks && data.context_chunks.length > 0) {
+        data.context_chunks.forEach((chunk, i) => {
+          const div = document.createElement("div");
+          div.className = "chunk";
+          div.innerHTML = `<span class="chunk-label">Chunk ${i + 1}</span><p>${chunk}</p>`;
+          contextChunks.appendChild(div);
+        });
+      } else {
+        contextChunks.innerHTML = "<p class='no-context'>No context chunks available.</p>";
+      }
+
+      resultsSection.classList.remove("hidden");
+      resultsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      clearError();
+      const query = input.value.trim();
+      if (!query) return;
+
+      setLoading(true);
+      try {
+        const res = await fetch("/query", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query }),
+        });
+        const data = await res.json();
+
+        if (!res.ok || data.error) {
+          showError(data.error || "An unexpected error occurred.");
+        } else {
+          renderResults(data);
+        }
+      } catch (err) {
+        showError("Network error — please check your connection and try again.");
+      } finally {
+        setLoading(false);
+      }
+    });
+  </script>
+</body>
+</html>
